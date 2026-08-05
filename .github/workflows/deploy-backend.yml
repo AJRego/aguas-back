@@ -1,0 +1,144 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ACR: aguasacr
+  APP_NAME: aguas-back
+  PLAN_NAME: aguas-plan
+  REGISTRY: aguasacr.azurecr.io
+  IMAGE: aguas-back
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+  deploy:
+    name: Deploy to Azure
+    needs: ci
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }} \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest \
+            .
+
+      - name: Trivy security scan
+        uses: aquasec/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          format: table
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infrastructure (IaC)
+        run: |
+          az group create \
+            --name ${{ secrets.AZURE_RG_NAME }} \
+            --location eastus \
+            --output none
+
+          az deployment group create \
+            --resource-group ${{ secrets.AZURE_RG_NAME }} \
+            --template-file infra/main.bicep \
+            --parameters \
+              appName=${{ env.APP_NAME }} \
+              acrName=${{ env.ACR }} \
+              planName=${{ env.PLAN_NAME }} \
+              dockerImage=${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }} \
+              mongodbUri="${{ secrets.MONGODB_URI }}" \
+              port="${{ secrets.PORT }}"
+
+      - name: Get ACR credentials
+        id: acr-credentials
+        run: |
+          {
+            echo "username=$(az acr credential show --name ${{ env.ACR }} --query username --output tsv)"
+            echo "password=$(az acr credential show --name ${{ env.ACR }} --query passwords[0].value --output tsv)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Docker login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.REGISTRY }}
+          username: ${{ steps.acr-credentials.outputs.username }}
+          password: ${{ steps.acr-credentials.outputs.password }}
+
+      - name: Push image to ACR
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.APP_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}

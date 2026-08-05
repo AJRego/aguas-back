@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+
+# Compiled output
+dist
+build
+coverage
+
+# Environments (nunca subir credenciales)
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.github
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Logs
+*.log
+logs
+
+# Tests
+test
+
+# Editors / OS
+.vscode
+.idea
+.DS_Store
+
+# Local stores
+.pnpm-store
+.pnpm-home

@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders de ejemplo del README de NestJS (no son secretos reales)"
+regexes = [
+  '''abc123def456''',
+]

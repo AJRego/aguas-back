@@ -1,0 +1,6 @@
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "❌ gitleaks no está instalado. Instálalo: brew install gitleaks"
+  exit 1
+fi
+
+gitleaks detect --source . --exit-code 1 --redact --no-banner
