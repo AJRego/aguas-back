@@ -84,5 +84,16 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "pnpm": {
+    "overrides": {
+      "glob": "^10.5.0",
+      "lodash": "^4.18.0",
+      "multer": "^2.2.0",
+      "picomatch": "^4.0.4",
+      "tmp": "^0.2.6",
+      "qs": "^6.15.2",
+      "body-parser": "^1.20.6"
+    }
   }
 }
