@@ -100,7 +100,7 @@ jobs:
         run: |
           az group create \
             --name ${{ secrets.AZURE_RG_NAME }} \
-            --location eastus \
+            --location centralus \
             --output none
 
           az deployment group create \
