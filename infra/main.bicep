@@ -6,6 +6,7 @@ param dockerImage string
 @secure()
 param mongodbUri string
 param port string = '3000'
+param allowedOrigins string = 'https://calm-bush-0efc41010.7.azurestaticapps.net'
 
 resource acr 'Microsoft.ContainerRegistry/registries@2023-01-01-preview' = {
   name: acrName
@@ -51,6 +52,10 @@ resource webapp 'Microsoft.Web/sites@2022-09-01' = {
         {
           name: 'WEBSITES_PORT'
           value: port
+        }
+        {
+          name: 'ALLOWED_ORIGINS'
+          value: allowedOrigins
         }
       ]
     }
